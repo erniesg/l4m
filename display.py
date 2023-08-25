@@ -1,91 +1,81 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import time
-import datetime
 import argparse
-import pyautogui
-import pygetwindow as gw
 import os
+import datetime
+from screeninfo import get_monitors
 
 def manage_browser_sessions(shutdown_hour, shutdown_minute, countdown_seconds):
     print("Script started")
+    monitors = get_monitors()
+    print(f"Detected {len(monitors)} monitors.\n")
 
-    # Define chrome options
-    chrome_options = Options()
-    chrome_options.add_argument("--start-maximized")
+    for monitor in monitors:
+        print(f"Monitor Name: {monitor.name}, Width: {monitor.width}, Height: {monitor.height}, Position: (X: {monitor.x}, Y: {monitor.y})\n")
 
-    # Setup ChromeDriver
-    webdriver_service = Service(ChromeDriverManager().install())
+    urls = [
+        "https://www.nationalgallery.sg/",
+        "https://www.youtube.com/",
+        "https://www.google.com"
+    ]
 
-    # Create a new Chrome browser instance
-    browser1 = webdriver.Chrome(service=webdriver_service, options=chrome_options)
-    browser1.get("https://erniesg.budibase.app/app/testfeedback#/leaderboard")
-    time.sleep(3)
+    target_monitors = [monitors[2], monitors[1], monitors[3]]
 
-    # Find the window and maximize
-    window1 = gw.getWindowsWithTitle('Google Chrome')[0]
-    print(f"Window1 position: {window1.left}, {window1.top}")
+    browsers = []  # List to store all browser instances
 
-    # Move the browser window to the first screen (located above)
-    print("Moving first window to first screen...")
-    pyautogui.FAILSAFE = False  # Disable the fail-safe feature
-    pyautogui.moveTo(0, 0)  # Move the cursor to the top-left corner of the screen
-    print("Cursor initialised at the top left.")
-    pyautogui.dragTo(0, -2160, 2, button='left')  # Then drag the cursor to the destination coordinates
-    pyautogui.FAILSAFE = True  # Enable the fail-safe feature again
-    print("Window1 moved to first screen.")
+    # Open all the browser windows first
+    for _ in urls:
+        browser = webdriver.Chrome()  # Just open Chrome without any positioning arguments
+        time.sleep(2)  # Let it render
+        browsers.append(browser)  # Store the browser instance for later use
 
-    # Fullscreen the window once it's on the first screen
-    window1.maximize()
-    print("Window1 maximized.")
+    # Position and maximize each browser
+    for index, browser in enumerate(browsers):
+        # Set the position using Selenium
+        browser.set_window_position(target_monitors[index].x, target_monitors[index].y)
+        time.sleep(2)  # Let the move complete
+        browser.maximize_window()  # Now maximize it
 
-    # Move the cursor back to the main screen
-    pyautogui.FAILSAFE = False
-    pyautogui.moveTo(960, 540)  # These coordinates are in the middle of a 1920x1080 screen. Adjust if necessary.
-    pyautogui.FAILSAFE = True
-    print("Cursor moved back to main screen.")
+        window_rect = browser.get_window_rect()
+        print(f"Initial position for window {index + 1}: X={window_rect['x']}, Y={window_rect['y']}, Width={window_rect['width']}, Height={window_rect['height']}")
 
-    # Create a second Chrome browser instance
-    browser2 = webdriver.Chrome(service=webdriver_service, options=chrome_options)
-    browser2.get("https://erniesg.budibase.app/app/testfeedback#/feedback")
-    time.sleep(3)
+    # Navigate to the desired URLs
+    for index, (browser, url) in enumerate(zip(browsers, urls)):
+        browser.get(url)
+        time.sleep(5)
 
-    # Find the window and ensure it is on screen 2
-    window2 = gw.getWindowsWithTitle('Google Chrome')[0]
-    print(f"Window2 position: {window2.left}, {window2.top}")
+        window_rect = browser.get_window_rect()
+        print(f"Maximized position for window {index + 1}: X={window_rect['x']}, Y={window_rect['y']}, Width={window_rect['width']}, Height={window_rect['height']}")
 
-    # Maximize window2
-    window2.maximize()
+        print(f"Browser window {index + 1} opened and maximized on monitor {index + 1} with URL: {url}\n")
 
-    # If countdown_seconds is specified, we simply sleep for that long.
+    # Wait for shutdown or countdown
     if countdown_seconds:
-        print(f"Waiting for {countdown_seconds} seconds to close browsers and turn off the monitor...")
+        print(f"Waiting for {countdown_seconds} seconds to close browsers...")
         time.sleep(countdown_seconds)
-    else:
-        # Otherwise, we wait until it's the specified shutdown time
-        print(f"Waiting until {shutdown_hour}:{shutdown_minute} to close browsers and turn off the monitor...")
+        for browser in browsers:
+            browser.quit()
+    elif shutdown_hour is not None and shutdown_minute is not None:
+        print(f"Waiting until {shutdown_hour}:{shutdown_minute} to close browsers...")
         while True:
             now = datetime.datetime.now()
             if now.hour == shutdown_hour and now.minute == shutdown_minute:
                 break
             time.sleep(1)
+        for browser in browsers:
+            browser.quit()
+    else:
+        print("No shutdown time or countdown specified. Browsers will remain open. Press Enter when you wish to close them.")
+        input()  # Wait for user to press Enter
 
-    # Close all browser windows
-    browser1.quit()
-    browser2.quit()
-    print("Browser windows closed.")
-
-    # Turn off the monitors using nircmd
-    print("Turning off monitor...")
-    os.system('C:\\Users\\erniesg\\Downloads\\nircmd\\nircmd.exe monitor off')
-
-    time.sleep(5)
+    if countdown_seconds or (shutdown_hour and shutdown_minute):
+        # Turn off the monitors using nircmd
+        print("Turning off monitor...")
+        os.system('C:\\Users\\erniesg\\Downloads\\nircmd\\nircmd.exe monitor off')
+        time.sleep(5)
 
     print("Script finished")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -93,9 +83,5 @@ if __name__ == "__main__":
     parser.add_argument("--minute", type=int, help="Minute to shutdown", default=None)
     parser.add_argument("--countdown", type=int, help="Countdown seconds to shutdown", default=None)
     args = parser.parse_args()
-
-    if args.countdown is None and (args.hour is None or args.minute is None):
-        print("Either --hour and --minute, or --countdown must be specified.")
-        exit(1)
 
     manage_browser_sessions(args.hour, args.minute, args.countdown)

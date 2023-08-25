@@ -1,6 +1,9 @@
 *REQUIREMENTS*
 
 This requires Windows, and packages such as Selenium to work.
+`pip install selenium`
+`pip install webdriver_manager`
+`pip install pyautogui`
 
 *HOW TO RUN*
 
